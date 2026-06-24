@@ -10,42 +10,79 @@
     bg.appendChild(b);
   }
 })();
-
-// ── User store (in-memory, demo) ──
-const users = [{ email: 'demo@aquasmart.com', pass: 'aqua1234', name: 'Simón de Iriondo' }];
+ 
+// ── User store (MongoDB via backend) ──
 let currentUser = null;
-
+ 
 function switchTab(t) {
   document.getElementById('login-form').style.display = t==='login' ? '' : 'none';
   document.getElementById('register-form').style.display = t==='register' ? '' : 'none';
   document.querySelectorAll('.tab-btn').forEach((b,i) => b.classList.toggle('active', (i===0&&t==='login')||(i===1&&t==='register')));
 }
-
-function doLogin() {
+ 
+async function doLogin() {
   const email = document.getElementById('login-email').value.trim();
   const pass = document.getElementById('login-pass').value;
-  const user = users.find(u => u.email === email && u.pass === pass);
   const err = document.getElementById('login-error');
-  if (user) { err.style.display='none'; launchApp(user); }
-  else { err.style.display='block'; }
+  try {
+    const res = await fetch('/api/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, password: pass })
+    });
+    const data = await res.json();
+    if (data.ok) {
+      err.style.display = 'none';
+      launchApp({ name: data.name, email: data.email });
+    } else {
+      err.textContent = data.error;
+      err.style.display = 'block';
+    }
+  } catch {
+    err.textContent = 'Error de conexión con el servidor.';
+    err.style.display = 'block';
+  }
 }
-
-function doRegister() {
-  const name = document.getElementById('reg-name').value.trim();
+ 
+async function doRegister() {
+  const name  = document.getElementById('reg-name').value.trim();
   const email = document.getElementById('reg-email').value.trim();
-  const pass = document.getElementById('reg-pass').value;
+  const pass  = document.getElementById('reg-pass').value;
   const pass2 = document.getElementById('reg-pass2').value;
-  const err = document.getElementById('register-error');
-  if (!name || !email || !pass) { err.textContent='Completá todos los campos.'; err.style.display='block'; return; }
-  if (pass.length < 6) { err.textContent='La contraseña debe tener al menos 6 caracteres.'; err.style.display='block'; return; }
-  if (pass !== pass2) { err.textContent='Las contraseñas no coinciden.'; err.style.display='block'; return; }
-  if (users.find(u => u.email === email)) { err.textContent='Ese correo ya está registrado.'; err.style.display='block'; return; }
-  const user = { email, pass, name };
-  users.push(user);
-  err.style.display='none';
-  launchApp(user);
+  const err   = document.getElementById('register-error');
+ 
+  if (!name || !email || !pass) {
+    err.textContent = 'Completá todos los campos.';
+    err.style.display = 'block'; return;
+  }
+  if (pass.length < 6) {
+    err.textContent = 'La contraseña debe tener al menos 6 caracteres.';
+    err.style.display = 'block'; return;
+  }
+  if (pass !== pass2) {
+    err.textContent = 'Las contraseñas no coinciden.';
+    err.style.display = 'block'; return;
+  }
+  try {
+    const res = await fetch('/api/register', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name, email, password: pass })
+    });
+    const data = await res.json();
+    if (data.ok) {
+      err.style.display = 'none';
+      launchApp({ name: data.name, email: data.email });
+    } else {
+      err.textContent = data.error;
+      err.style.display = 'block';
+    }
+  } catch {
+    err.textContent = 'Error de conexión con el servidor.';
+    err.style.display = 'block';
+  }
 }
-
+ 
 function launchApp(user) {
   currentUser = user;
   document.getElementById('auth-screen').style.display = 'none';
@@ -60,13 +97,13 @@ function launchApp(user) {
   calcVol();
   startLiveData();
 }
-
+ 
 function doLogout() {
   document.getElementById('auth-screen').style.display = 'flex';
   document.getElementById('app-screen').style.display = 'none';
   if (liveInterval) clearInterval(liveInterval);
 }
-
+ 
 // ── Navigation ──
 function showSection(s) {
   ['dashboard','piscina','historial','alertas','esp32','ia'].forEach(id =>
@@ -78,17 +115,16 @@ function showSection(s) {
   });
   if (s==='historial') draw7dChart();
 }
-
+ 
 // ── pH mini chart ──
 function initCharts() {
   const svg = document.getElementById('ph-chart');
   const data = [7.1,7.3,7.6,7.8,8.1,7.5,7.3,7.2,7.4,7.3,7.1,7.0,7.2,7.3,7.2,7.4,7.5,7.3,7.2,7.1,7.3,7.4,7.3,7.2];
   drawLine(svg, data, 6.5, 8.5, 500, 120);
 }
-
+ 
 function drawLine(svg, data, min, max, W, H) {
   const pts = data.map((v,i) => `${(i/(data.length-1))*W},${H - ((v-min)/(max-min))*H}`);
-  // Optimal range band
   const yHi = H - ((7.6-min)/(max-min))*H;
   const yLo = H - ((6.8-min)/(max-min))*H;
   svg.innerHTML = `
@@ -99,13 +135,13 @@ function drawLine(svg, data, min, max, W, H) {
     <line x1="0" y1="${yLo}" x2="${W}" y2="${yLo}" stroke="rgba(34,211,163,0.3)" stroke-dasharray="4"/>
   `;
 }
-
+ 
 function draw7dChart() {
   const svg = document.getElementById('ph-chart-7d');
   const data = [7.5,7.8,8.1,7.4,7.2,7.0,7.1,7.3,7.6,7.9,8.0,7.5,7.3,7.2,7.1,7.0,7.2,7.4,7.5,7.3,7.2,7.1,7.3,7.4,7.3,7.2,7.1,7.3,7.4,7.3,7.2,7.1,7.3,7.4,7.3,7.2,7.1,7.3,7.4,7.3,7.2,7.1];
   drawLine(svg, data, 6.5, 8.5, 600, 160);
 }
-
+ 
 // ── Pool volume calc ──
 function calcVol() {
   const l = parseFloat(document.getElementById('pool-largo').value)||0;
@@ -116,7 +152,7 @@ function calcVol() {
     `💧 Volumen estimado: <strong>${vol} m³</strong> · Equivalente a ${(vol*1000).toLocaleString('es-AR')} litros de agua`;
   document.getElementById('card-vol').textContent = vol;
 }
-
+ 
 // ── Historial ──
 function buildHistorial() {
   const rows = [
@@ -137,7 +173,7 @@ function buildHistorial() {
       <td style="padding:10px 0;color:var(--aqua);font-weight:600">${r[4]}</td>
     </tr>`).join('');
 }
-
+ 
 // ── Alertas ──
 function buildAlertas() {
   const alerts = [
@@ -156,7 +192,7 @@ function buildAlertas() {
       </div>
     </div>`).join('');
 }
-
+ 
 // ── Live data simulation ──
 let liveInterval;
 function startLiveData() {
@@ -170,8 +206,8 @@ function startLiveData() {
     document.getElementById('ph-marker').style.left = pct + '%';
   }, 3000);
 }
-
-// Enter key support
+ 
+// ── Enter key support ──
 document.addEventListener('keydown', e => {
   if (e.key === 'Enter') {
     if (document.getElementById('login-form').style.display !== 'none') doLogin();
